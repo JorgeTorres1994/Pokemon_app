@@ -2,132 +2,134 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class PokemonBasic {
-  final String name;
   final int id;
+  final String name;
   final List<String> types;
 
-  PokemonBasic({required this.name, required this.id, required this.types});
+  PokemonBasic({required this.id, required this.name, required this.types});
+}
+
+class EvolutionStage {
+  final int id;
+  final String name;
+  final String imageUrl;
+
+  EvolutionStage({
+    required this.id,
+    required this.name,
+    required this.imageUrl,
+  });
 }
 
 class PokemonDetail {
   final int id;
   final String name;
+  final String nameEs;
+  final String descriptionEs;
   final String imageUrl;
   final List<String> types;
   final int height;
   final int weight;
   final List<String> abilities;
   final Map<String, int> stats;
-
-  final String nameEs;
-  final String? descriptionEs;
+  final List<EvolutionStage> evolutionChain;
 
   PokemonDetail({
     required this.id,
     required this.name,
+    required this.nameEs,
+    required this.descriptionEs,
     required this.imageUrl,
     required this.types,
     required this.height,
     required this.weight,
     required this.abilities,
     required this.stats,
-    required this.nameEs,
-    this.descriptionEs,
+    required this.evolutionChain,
   });
 }
 
-const Map<String, String> typeTranslations = {
-  'normal': 'Normal',
-  'fire': 'Fuego',
-  'water': 'Agua',
-  'grass': 'Planta',
-  'electric': 'Eléctrico',
-  'ice': 'Hielo',
-  'fighting': 'Lucha',
-  'poison': 'Veneno',
-  'ground': 'Tierra',
-  'flying': 'Volador',
-  'psychic': 'Psíquico',
-  'bug': 'Bicho',
-  'rock': 'Roca',
-  'ghost': 'Fantasma',
-  'dragon': 'Dragón',
-  'dark': 'Siniestro',
-  'steel': 'Acero',
-  'fairy': 'Hada',
-};
-
 class PokeApiService {
-  static Future<List<PokemonBasic>> fetchPokemonList({int limit = 100}) async {
-    final url = Uri.parse('https://pokeapi.co/api/v2/pokemon?limit=$limit');
-    final response = await http.get(url);
+  static Future<List<PokemonBasic>> fetchPokemonList() async {
+    final response = await http.get(
+      Uri.parse('https://pokeapi.co/api/v2/pokemon?limit=1000'),
+    );
+    final data = jsonDecode(response.body);
 
-    if (response.statusCode != 200) {
-      throw Exception('Error al obtener la lista');
+    List<PokemonBasic> pokemons = [];
+
+    // Limitar a 151 y evitar saturación con delay
+    for (var i = 0; i < 151; i++) {
+      final result = data['results'][i];
+      final url = result['url'] as String;
+      final id = int.parse(url.split('/')[url.split('/').length - 2]);
+
+      final detailRes = await http.get(Uri.parse(url));
+      final detail = jsonDecode(detailRes.body);
+
+      final types = (detail['types'] as List)
+          .map((t) => t['type']['name'] as String)
+          .toList();
+
+      pokemons.add(PokemonBasic(id: id, name: result['name'], types: types));
+
+      await Future.delayed(const Duration(milliseconds: 50)); // para no saturar
     }
 
-    final data = jsonDecode(response.body);
-    final results = data['results'] as List;
-
-    return Future.wait(
-      results.asMap().entries.map((entry) async {
-        final index = entry.key;
-        final item = entry.value;
-        final id = index + 1;
-
-        final detailUrl = 'https://pokeapi.co/api/v2/pokemon/$id';
-        final detailRes = await http.get(Uri.parse(detailUrl));
-
-        if (detailRes.statusCode != 200)
-          throw Exception('Error al obtener detalle');
-
-        final detailData = jsonDecode(detailRes.body);
-        final types = (detailData['types'] as List)
-            .map((t) => t['type']['name'] as String)
-            .toList();
-
-        return PokemonBasic(name: item['name'], id: id, types: types);
-      }).toList(),
-    );
+    return pokemons;
   }
 
   static Future<PokemonDetail> fetchPokemonDetail(int id) async {
-    final url = Uri.parse('https://pokeapi.co/api/v2/pokemon/$id');
-    final res = await http.get(url);
-    if (res.statusCode != 200) throw Exception('Error al obtener detalles');
-
+    final res = await http.get(
+      Uri.parse('https://pokeapi.co/api/v2/pokemon/$id'),
+    );
     final data = jsonDecode(res.body);
 
     final speciesRes = await http.get(
       Uri.parse('https://pokeapi.co/api/v2/pokemon-species/$id'),
     );
-    String nameEs = data['name'];
-    String? descriptionEs;
+    final speciesData = jsonDecode(speciesRes.body);
 
-    if (speciesRes.statusCode == 200) {
-      final speciesData = jsonDecode(speciesRes.body);
-      final names = speciesData['names'] as List;
-      final entries = speciesData['flavor_text_entries'] as List;
+    final nameEs = (speciesData['names'] as List).firstWhere(
+      (n) => n['language']['name'] == 'es',
+    )['name'];
 
-      // Nombre en español
-      nameEs = names.firstWhere(
-        (n) => n['language']['name'] == 'es',
-        orElse: () => {'name': data['name']},
-      )['name'];
+    final descriptionEs = (speciesData['flavor_text_entries'] as List)
+        .firstWhere(
+          (entry) => entry['language']['name'] == 'es',
+          orElse: () => {},
+        )['flavor_text'];
 
-      // Descripción en español
-      final descEntry = entries.firstWhere(
-        (e) => e['language']['name'] == 'es',
-        orElse: () => {'flavor_text': ''},
+    final evolutionUrl = speciesData['evolution_chain']['url'];
+    final evoRes = await http.get(Uri.parse(evolutionUrl));
+    final evoData = jsonDecode(evoRes.body);
+
+    List<EvolutionStage> evolutionChain = [];
+
+    void extractChain(Map<String, dynamic> chain) {
+      final name = chain['species']['name'];
+      final url = chain['species']['url'];
+      final parts = url.split('/');
+      final id = int.parse(parts[parts.length - 2]);
+      final imageUrl =
+          'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$id.png';
+
+      evolutionChain.add(
+        EvolutionStage(id: id, name: name, imageUrl: imageUrl),
       );
-      descriptionEs = (descEntry['flavor_text'] as String?)
-          ?.replaceAll('\n', ' ')
-          .replaceAll('\f', ' ');
+
+      if (chain['evolves_to'] != null && chain['evolves_to'].isNotEmpty) {
+        extractChain(chain['evolves_to'][0]);
+      }
     }
+
+    extractChain(evoData['chain']);
 
     return PokemonDetail(
       id: data['id'],
       name: data['name'],
+      nameEs: nameEs,
+      descriptionEs: descriptionEs,
       imageUrl: data['sprites']['other']['official-artwork']['front_default'],
       types: (data['types'] as List)
           .map((t) => t['type']['name'] as String)
@@ -142,8 +144,7 @@ class PokeApiService {
           (s) => MapEntry(s['stat']['name'], s['base_stat']),
         ),
       ),
-      nameEs: nameEs,
-      descriptionEs: descriptionEs,
+      evolutionChain: evolutionChain,
     );
   }
 }

@@ -15,9 +15,31 @@ class PokeApp extends StatelessWidget {
     return MaterialApp(
       title: 'PokeApp',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.redAccent),
-        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: Color(0xFF1A1A1D), // Fondo general
+        colorScheme: ColorScheme.dark(
+          primary: Color(0xFFC3073F), // Rojo Pokédex
+          secondary: Color(0xFF6F2232), // Rojo más oscuro
+        ),
+        cardColor: Color(0xFF4E4E50), // Para tarjetas
+        textTheme: GoogleFonts.orbitronTextTheme().apply(
+          bodyColor: Colors.white,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFC3073F),
+          foregroundColor: Colors.white,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Color(0xFF4E4E50),
+          hintStyle: TextStyle(color: Colors.white60),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: BorderSide.none,
+          ),
+        ),
       ),
+
       home: const HomePage(),
     );
   }
@@ -84,13 +106,14 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _pokemonFuture = PokeApiService.fetchPokemonList(limit: 1000);
+    //_pokemonFuture = PokeApiService.fetchPokemonList(limit: 50);
+    _pokemonFuture = PokeApiService.fetchPokemonList();
     _pokemonFuture.then((value) {
       setState(() {
         _allPokemons = value;
       });
     });
-  } 
+  }
 
   @override
   Widget build(BuildContext context) {
