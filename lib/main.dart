@@ -159,28 +159,37 @@ class _HomePageState extends State<HomePage> {
                   final typeName = typeNamesEs[typeKey]!;
                   final isSelected = _selectedType == typeKey;
 
-                  return ChoiceChip(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (typeIcons.containsKey(typeKey)) ...[
-                          Icon(typeIcons[typeKey], size: 18),
-                          const SizedBox(width: 4),
+                  return ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 100),
+                    child: ChoiceChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (typeIcons.containsKey(typeKey)) ...[
+                            Icon(typeIcons[typeKey], size: 16),
+                            const SizedBox(width: 4),
+                          ],
+                          Flexible(
+                            child: Text(
+                              typeName,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
                         ],
-                        Text(typeName),
-                      ],
+                      ),
+                      selected: isSelected,
+                      selectedColor: Colors.red.shade200,
+                      backgroundColor: Colors.grey.shade800,
+                      onSelected: (_) =>
+                          setState(() => _selectedType = typeKey),
                     ),
-                    selected: isSelected,
-                    selectedColor: Colors.red.shade200,
-                    backgroundColor: Colors.grey.shade200,
-                    onSelected: (_) {
-                      setState(() => _selectedType = typeKey);
-                    },
                   );
                 },
               ),
             ),
           ),
+
           Expanded(
             child: FutureBuilder(
               future: _pokemonFuture,
